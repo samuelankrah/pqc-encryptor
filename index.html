@@ -5,48 +5,24 @@
   <title>ENTAQ | PQC Demo (Real Kyber)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <style>
-    body {
-      background: #fff; color: #222;
-      font-family: 'Segoe UI', sans-serif;
-      max-width: 800px; margin: auto; padding: 2rem; line-height: 1.5;
-    }
+    body { background: #fff; color: #222; font-family: 'Segoe UI', sans-serif; max-width: 800px; margin: auto; padding: 2rem; line-height: 1.5; }
     header { text-align: center; margin-bottom: 2rem; }
     img.logo { width: 140px; display: block; margin: auto; }
     h1 { color: #0066cc; margin: .5rem 0; }
     .tagline { color: #555; margin-bottom: 1.5rem; }
-    .banner {
-      background: #f9f9f9; border-left: 5px solid #0066cc;
-      padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;
-    }
-    .toggle {
-      color: #0066cc; cursor: pointer; text-align: center; margin: 1rem 0;
-    }
-    .info {
-      display: none; background: #fdfdfd; border: 1px solid #ccc;
-      border-radius: 8px; padding: 1rem;
-    }
+    .banner { background: #f9f9f9; border-left: 5px solid #0066cc; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; }
+    .toggle { color: #0066cc; cursor: pointer; text-align: center; margin: 1rem 0; }
+    .info { display: none; background: #fdfdfd; border: 1px solid #ccc; border-radius: 8px; padding: 1rem; }
     label { display: block; margin-top: 1rem; font-weight: bold; }
-    textarea, button {
-      width: 100%; padding: 1rem; margin-top: .5rem;
-      border-radius: 8px; font-size: 1rem; border: 1px solid #ccc;
-    }
+    textarea, button { width: 100%; padding: 1rem; margin-top: .5rem; border-radius: 8px; font-size: 1rem; border: 1px solid #ccc; }
     textarea { resize: vertical; min-height: 120px; }
-    button {
-      font-weight: bold; border: none; cursor: pointer;
-    }
+    button { font-weight: bold; border: none; cursor: pointer; }
     .encrypt-btn { background: #0066cc; color: #fff; }
     .decrypt-btn { background: #ff6600; color: #fff; margin-top: .5rem; }
-    .output {
-      display: none; background: #fbfbfb; border: 1px solid #ddd;
-      border-radius: 8px; padding: 1rem; margin-top: 1.5rem;
-      word-break: break-word;
-    }
+    .output { display: none; background: #fbfbfb; border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin-top: 1.5rem; word-break: break-word; }
     .output.visible { display: block; }
     .label { font-weight: bold; margin-top: 1rem; }
-    @media (max-width:600px) {
-      body { padding:1rem; }
-      textarea, button { font-size: .9rem; }
-    }
+    @media (max-width:600px) { body { padding:1rem; } textarea,button { font-size:.9rem; } }
   </style>
 </head>
 <body>
@@ -68,14 +44,13 @@
     <p><strong>How It Works:</strong>
       <ol>
         <li>Generate a Kyber768 keypair.</li>
-        <li>Encapsulate → derive a shared secret.</li>
+        <li>Encapsulate with the <code>publicKey</code> → derive a shared secret.</li>
         <li>Encrypt your message with AES-GCM using that secret.</li>
         <li>Decapsulate + decrypt to prove round-trip.</li>
       </ol>
     </p>
     <p style="font-size:.85rem;color:#666;">
-      Aligns with PCI DSS 4.0 & NIST SP 800-57/208.  
-      Runs entirely in your browser—no server, no data leaves your machine.
+      Aligns with PCI DSS 4.0 & NIST SP 800-57/208. Runs entirely in your browser—no server, no data leaves your machine.
     </p>
   </div>
 
@@ -92,84 +67,77 @@
   </div>
 
   <script type="module">
-    console.log("🚀 Loading mlkem (Kyber768)...");
+    console.log("🚀 Loading Kyber768 module…");
     import { MlKem768 } from "https://esm.sh/mlkem@2.3.1";
-    console.log("✅ mlkem loaded:", MlKem768);
+    console.log("✅ Kyber ready:", MlKem768);
 
     // Elements
-    const toggleBtn  = document.getElementById("toggleBtn");
-    const infoBox    = document.getElementById("infoBox");
-    const encBtn     = document.getElementById("encryptBtn");
-    const decBtn     = document.getElementById("decryptBtn");
-    const results    = document.getElementById("results");
-    const ctEl       = document.getElementById("ciphertext");
-    const ssEl       = document.getElementById("shared");
-    const decEl      = document.getElementById("decrypted");
-    const plaintext  = document.getElementById("plaintext");
+    const toggleBtn = document.getElementById("toggleBtn");
+    const infoBox   = document.getElementById("infoBox");
+    const encBtn    = document.getElementById("encryptBtn");
+    const decBtn    = document.getElementById("decryptBtn");
+    const results   = document.getElementById("results");
+    const ctEl      = document.getElementById("ciphertext");
+    const ssEl      = document.getElementById("shared");
+    const decEl     = document.getElementById("decrypted");
+    const ptEl      = document.getElementById("plaintext");
 
     let sk, ciphertextBytes, sharedSecret, iv, payload;
 
-    // UI wiring
+    // Toggle explanation
     toggleBtn.onclick = () => {
-      const visible = infoBox.style.display === "block";
-      infoBox.style.display = visible ? "none" : "block";
-      toggleBtn.textContent = visible
-        ? "🔎 Show “What This Means”"
-        : "🔎 Hide “What This Means”";
+      const on = infoBox.style.display === "block";
+      infoBox.style.display = on ? "none" : "block";
+      toggleBtn.textContent = on ? "🔎 Show “What This Means”" : "🔎 Hide “What This Means”";
     };
 
-    // Enable buttons now that module is ready
+    // Enable Encrypt once module loads
     encBtn.disabled = false;
     encBtn.textContent = "Encrypt";
 
+    // Encrypt flow
     encBtn.onclick = async () => {
-      const msg = plaintext.value.trim();
-      if (!msg) return alert("Please type a message.");
+      const msg = ptEl.value.trim();
+      if (!msg) return alert("Please type a message to encrypt.");
 
       encBtn.disabled = true; encBtn.textContent = "Encrypting…";
       decBtn.disabled = true;
       results.classList.remove("visible");
 
-      // 1) Generate keypair
+      // 1) Keypair
       const kem = new MlKem768();
-      [ , sk ] = await kem.generateKeyPair();
+      const [pk, skLocal] = await kem.generateKeyPair();
+      sk = skLocal;
 
-      // 2) Encapsulate → ciphertext + shared
-      [ciphertextBytes, sharedSecret] = await kem.encap(kem.publicKey);
+      // 2) Encapsulate using the captured public key
+      [ciphertextBytes, sharedSecret] = await kem.encap(pk);
 
       // 3) AES-GCM encrypt
       iv = crypto.getRandomValues(new Uint8Array(12));
-      const aesKey = await crypto.subtle.importKey(
-        "raw", sharedSecret, "AES-GCM", false, ["encrypt"]
-      );
-      const ctBuf = await crypto.subtle.encrypt(
-        { name:"AES-GCM", iv }, aesKey, new TextEncoder().encode(msg)
-      );
-      payload = new Uint8Array(iv.byteLength + ctBuf.byteLength);
+      const aesKey = await crypto.subtle.importKey("raw", sharedSecret, "AES-GCM", false, ["encrypt"]);
+      const ctBuf  = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aesKey, new TextEncoder().encode(msg));
+      payload     = new Uint8Array(iv.length + ctBuf.byteLength);
       payload.set(iv, 0);
-      payload.set(new Uint8Array(ctBuf), iv.byteLength);
+      payload.set(new Uint8Array(ctBuf), iv.length);
 
-      // Show results
+      // Display
       ctEl.textContent = btoa(String.fromCharCode(...payload));
       ssEl.textContent = btoa(String.fromCharCode(...sharedSecret));
-      decEl.textContent = "(Click Decrypt to verify)";
+      decEl.textContent= "(Click Decrypt to verify)";
       results.classList.add("visible");
 
       encBtn.disabled = false; encBtn.textContent = "Encrypt";
       decBtn.disabled = false;
     };
 
+    // Decrypt flow
     decBtn.onclick = async () => {
       decBtn.disabled = true; decBtn.textContent = "Decrypting…";
       try {
         const kem = new MlKem768();
         const ss2 = await kem.decap(ciphertextBytes, sk);
-        const aesKey = await crypto.subtle.importKey(
-          "raw", ss2, "AES-GCM", false, ["decrypt"]
-        );
-        const ptBuf = await crypto.subtle.decrypt(
-          { name:"AES-GCM", iv }, aesKey, payload.slice(iv.byteLength)
-        );
+        const aesKey = await crypto.subtle.importKey("raw", ss2, "AES-GCM", false, ["decrypt"]);
+        const ptBuf  = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, aesKey, payload.slice(iv.length));
         decEl.textContent = new TextDecoder().decode(ptBuf);
       } catch {
         decEl.textContent = "⚠️ Decryption failed";
