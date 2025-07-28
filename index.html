@@ -1,55 +1,201 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <title>PQC Encryptor – Real Kyber</title>
+  <meta charset="UTF-8">
+  <title>ENTAQ | Future-Proof PQC Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    body { max-width: 700px; margin: auto; padding: 2rem; font-family: sans-serif; background:#111; color:#f4f4f4; }
-    textarea, button { width: 100%; padding:1rem; margin-top:1rem; font-size:1rem; border-radius:8px; border:none; }
-    button { background:#00cec9;color:#fff;cursor:pointer;font-weight:bold; }
-    .output { background:#2d3436;padding:1rem;margin-top:1.5rem;border-radius:8px;word-wrap:break-word; }
+    body {
+      background: linear-gradient(135deg, #0e1117, #1f1f1f);
+      color: #f4f4f4;
+      font-family: 'Segoe UI', sans-serif;
+      max-width: 800px;
+      margin: auto;
+      padding: 2rem;
+    }
+    img.logo {
+      display: block;
+      margin: auto;
+      width: 120px;
+    }
+    h1, h2 {
+      text-align: center;
+      margin-bottom: 0.25rem;
+    }
+    .tagline {
+      text-align: center;
+      font-weight: bold;
+      color: #ccc;
+      margin-bottom: 2rem;
+    }
+    .banner {
+      background: #2d3436;
+      padding: 1rem;
+      border-left: 5px solid #00cec9;
+      margin-bottom: 1.5rem;
+      border-radius: 8px;
+    }
+    .toggle {
+      color: #ff7675;
+      cursor: pointer;
+      margin: 1rem 0;
+      text-align: center;
+    }
+    .info {
+      background: #1e272e;
+      padding: 1rem;
+      border-radius: 8px;
+      display: none;
+    }
+    textarea, button, input {
+      width: 100%;
+      padding: 1rem;
+      font-size: 1rem;
+      margin-top: 1rem;
+      border-radius: 8px;
+      border: none;
+    }
+    button {
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .encrypt-btn {
+      background-color: #00b894;
+      color: white;
+    }
+    .decrypt-btn {
+      background-color: #0984e3;
+      color: white;
+      margin-top: 0.5rem;
+    }
+    .output {
+      background: #2d3436;
+      padding: 1rem;
+      border-radius: 8px;
+      margin-top: 1.5rem;
+      word-break: break-word;
+    }
+    .label {
+      margin-top: 1rem;
+      font-weight: bold;
+    }
+    .small {
+      font-size: 0.875rem;
+      color: #aaa;
+    }
   </style>
 </head>
 <body>
-  <h1>🔐 PQC Encryptor (Kyber768 + AES-GCM)</h1>
-  <textarea id="plaintext" rows="5" placeholder="Type a message..."></textarea>
-  <button id="encryptBtn">Encrypt</button>
+
+  <img src="ENTAQ Logo!.png" alt="ENTAQ Logo" class="logo">
+  <h1>ENTAQ</h1>
+  <p class="tagline">Encrypted. Entangled. Empowered.</p>
+
+  <div class="banner">
+    🔐 <strong>Future-Proof Encryption Demo (Kyber768 + AES-GCM)</strong><br>
+    This app uses NIST-approved post-quantum cryptography to encrypt messages that even a quantum computer can’t break.  
+    Built for compliance-minded organizations, privacy pros, and future-forward security leaders.
+  </div>
+
+  <div class="toggle" onclick="toggleInfo()">🔎 Show “What This Means”</div>
+  <div class="info" id="explain-box">
+    <p><strong>Post-Quantum Encryption:</strong>  
+    Quantum computers will eventually break traditional encryption like RSA & ECC. Kyber768 is a NIST-approved algorithm that resists quantum attacks.</p>
+
+    <p><strong>Hybrid Encryption:</strong>  
+    We use Kyber to create a shared secret (like TLS does today), and AES-GCM to encrypt the actual message. This mirrors real-world secure communication practices.</p>
+
+    <p><strong>Compliance:</strong>  
+    - PCI DSS 4.0 requires strong encryption & key management (e.g., Sections 3.4, 3.6)  
+    - NIST SP 800-57 & SP 800-208 encourage post-quantum readiness  
+    - This app demonstrates alignment with both</p>
+
+    <p class="small">No data is stored. This runs entirely in your browser.</p>
+  </div>
+
+  <label for="plaintext">Enter Message:</label>
+  <textarea id="plaintext" rows="5" placeholder="Type your confidential message..."></textarea>
+
+  <button class="encrypt-btn" onclick="encrypt()">Encrypt</button>
+  <button class="decrypt-btn" onclick="decrypt()">Decrypt</button>
+
   <div class="output" id="results" hidden>
-    <h3>Encrypted Results (Base64)</h3>
-    <strong>Ciphertext:</strong><div id="ciphertext"></div>
-    <strong>Shared Secret:</strong><div id="shared"></div>
+    <h3>🔐 Encrypted Results (Base64)</h3>
+    <div class="label">Ciphertext:</div>
+    <div id="ciphertext"></div>
+
+    <div class="label">Shared Secret:</div>
+    <div id="shared"></div>
+
+    <div class="label">Decrypted Message:</div>
+    <div id="decrypted"></div>
   </div>
 
   <script type="module">
-    import { MlKem768 as Kyber } from "https://esm.sh/mlkem@latest";
-    const encryptBtn = document.getElementById("encryptBtn");
+    import { MlKem768 as Kyber } from 'https://esm.sh/mlkem@latest';
+
+    let sharedSecret = null;
+    let privateKey = null;
+    let ciphertextFull = null;
+    let iv = null;
+
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+
+    const results = document.getElementById("results");
+
+    function toggleInfo() {
+      const box = document.getElementById("explain-box");
+      box.style.display = box.style.display === 'none' ? 'block' : 'none';
+    }
+
     async function encrypt() {
-      const text = document.getElementById("plaintext").value;
-      const encoder = new TextEncoder();
-      const plaintext = encoder.encode(text);
+      const msg = document.getElementById("plaintext").value;
+      const plaintext = encoder.encode(msg);
 
       const recipient = new Kyber();
       const [pk, sk] = await recipient.generateKeyPair();
+      privateKey = sk;
 
       const sender = new Kyber();
-      const [ciphertextBytes, sharedSecretSender] = await sender.encap(pk);
+      const [ciphertextBytes, shared] = await sender.encap(pk);
+      sharedSecret = shared;
 
-      const sharedSecretReceiver = await recipient.decap(ciphertextBytes, sk);
+      const aesKey = await crypto.subtle.importKey("raw", shared, "AES-GCM", false, ["encrypt"]);
+      iv = crypto.getRandomValues(new Uint8Array(12));
+      const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aesKey, plaintext);
 
-      const key = await crypto.subtle.importKey("raw", sharedSecretSender, { name: "AES-GCM" }, false, ["encrypt"]);
-      const iv = crypto.getRandomValues(new Uint8Array(12));
-      const encrypted = await crypto.subtle.encrypt({ name:"AES-GCM", iv }, key, plaintext);
-      const full = new Uint8Array(iv.length + encrypted.byteLength);
-      full.set(iv,0);
-      full.set(new Uint8Array(encrypted), iv.length);
+      ciphertextFull = new Uint8Array(iv.length + encrypted.byteLength);
+      ciphertextFull.set(iv, 0);
+      ciphertextFull.set(new Uint8Array(encrypted), iv.length);
 
-      const b64Cipher = btoa(String.fromCharCode(...full));
-      const b64Secret = btoa(String.fromCharCode(...sharedSecretSender));
-      document.getElementById("ciphertext").textContent = b64Cipher;
-      document.getElementById("shared").textContent = b64Secret;
-      document.getElementById("results").hidden = false;
+      document.getElementById("ciphertext").textContent = btoa(String.fromCharCode(...ciphertextFull));
+      document.getElementById("shared").textContent = btoa(String.fromCharCode(...shared));
+      results.hidden = false;
     }
-    encryptBtn.onclick = encrypt;
+
+    async function decrypt() {
+      if (!sharedSecret || !ciphertextFull || !iv || !privateKey) {
+        alert("Please encrypt a message first.");
+        return;
+      }
+
+      const receiver = new Kyber();
+      const decryptedKey = await receiver.decap(ciphertextFull.slice(0, receiver.ciphertextBytes), privateKey);
+      const aesKey = await crypto.subtle.importKey("raw", decryptedKey, "AES-GCM", false, ["decrypt"]);
+
+      try {
+        const decrypted = await crypto.subtle.decrypt(
+          { name: "AES-GCM", iv },
+          aesKey,
+          ciphertextFull.slice(iv.length)
+        );
+        document.getElementById("decrypted").textContent = decoder.decode(decrypted);
+      } catch (e) {
+        document.getElementById("decrypted").textContent = "⚠️ Decryption failed";
+      }
+    }
   </script>
+
 </body>
 </html>
