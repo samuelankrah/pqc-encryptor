@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>ENTAQ | Future-Proof PQC Demo</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8" />
+  <title>ENTAQ | Post-Quantum Encryption Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     body {
-      background: linear-gradient(135deg, #0e1117, #1f1f1f);
-      color: #f4f4f4;
+      background: #ffffff;
+      color: #222;
       font-family: 'Segoe UI', sans-serif;
       max-width: 800px;
       margin: auto;
@@ -16,7 +16,7 @@
     img.logo {
       display: block;
       margin: auto;
-      width: 120px;
+      width: 140px;
     }
     h1, h2 {
       text-align: center;
@@ -25,24 +25,25 @@
     .tagline {
       text-align: center;
       font-weight: bold;
-      color: #ccc;
+      color: #555;
       margin-bottom: 2rem;
     }
     .banner {
-      background: #2d3436;
+      background: #f1f1f1;
       padding: 1rem;
-      border-left: 5px solid #00cec9;
+      border-left: 5px solid #2d98da;
       margin-bottom: 1.5rem;
       border-radius: 8px;
     }
     .toggle {
-      color: #ff7675;
+      color: #e17055;
       cursor: pointer;
       margin: 1rem 0;
       text-align: center;
     }
     .info {
-      background: #1e272e;
+      background: #fdfdfd;
+      border: 1px solid #ccc;
       padding: 1rem;
       border-radius: 8px;
       display: none;
@@ -53,14 +54,15 @@
       font-size: 1rem;
       margin-top: 1rem;
       border-radius: 8px;
-      border: none;
+      border: 1px solid #ccc;
     }
     button {
       cursor: pointer;
       font-weight: bold;
+      border: none;
     }
     .encrypt-btn {
-      background-color: #00b894;
+      background-color: #27ae60;
       color: white;
     }
     .decrypt-btn {
@@ -69,7 +71,7 @@
       margin-top: 0.5rem;
     }
     .output {
-      background: #2d3436;
+      background: #f5f6fa;
       padding: 1rem;
       border-radius: 8px;
       margin-top: 1.5rem;
@@ -81,50 +83,49 @@
     }
     .small {
       font-size: 0.875rem;
-      color: #aaa;
+      color: #666;
     }
   </style>
 </head>
 <body>
 
-  <img src="ENTAQ Logo!.png" alt="ENTAQ Logo" class="logo">
+  <img src="ENTAQ Logo!.png" alt="ENTAQ Logo" class="logo" />
   <h1>ENTAQ</h1>
   <p class="tagline">Encrypted. Entangled. Empowered.</p>
 
   <div class="banner">
-    🔐 <strong>Future-Proof Encryption Demo (Kyber768 + AES-GCM)</strong><br>
-    This app uses NIST-approved post-quantum cryptography to encrypt messages that even a quantum computer can’t break.  
-    Built for compliance-minded organizations, privacy pros, and future-forward security leaders.
+    🔐 <strong>Post-Quantum Encryption Demo (Kyber768 + AES-GCM)</strong><br>
+    This demo shows how to encrypt data using quantum-resistant key exchange and AES encryption—100% in the browser.
   </div>
 
   <div class="toggle" onclick="toggleInfo()">🔎 Show “What This Means”</div>
   <div class="info" id="explain-box">
     <p><strong>Post-Quantum Encryption:</strong>  
-    Quantum computers will eventually break traditional encryption like RSA & ECC. Kyber768 is a NIST-approved algorithm that resists quantum attacks.</p>
+    Quantum computers will break traditional encryption like RSA & ECC. Kyber768 is NIST-approved to resist those future threats.</p>
 
     <p><strong>Hybrid Encryption:</strong>  
-    We use Kyber to create a shared secret (like TLS does today), and AES-GCM to encrypt the actual message. This mirrors real-world secure communication practices.</p>
+    Just like TLS does today, this demo creates a secure key using Kyber768, then encrypts your message with AES-GCM.</p>
 
-    <p><strong>Compliance:</strong>  
-    - PCI DSS 4.0 requires strong encryption & key management (e.g., Sections 3.4, 3.6)  
-    - NIST SP 800-57 & SP 800-208 encourage post-quantum readiness  
-    - This app demonstrates alignment with both</p>
+    <p><strong>Compliance Ready:</strong><br>
+    - Meets PCI DSS 4.0 encryption intent (3.4, 3.6)<br>
+    - Supports NIST post-quantum guidelines<br>
+    - Great for demonstrating forward-thinking data protection</p>
 
-    <p class="small">No data is stored. This runs entirely in your browser.</p>
+    <p class="small">Runs locally in your browser. No data is sent or stored.</p>
   </div>
 
   <label for="plaintext">Enter Message:</label>
-  <textarea id="plaintext" rows="5" placeholder="Type your confidential message..."></textarea>
+  <textarea id="plaintext" rows="5" placeholder="Type your message..."></textarea>
 
   <button class="encrypt-btn" onclick="encrypt()">Encrypt</button>
   <button class="decrypt-btn" onclick="decrypt()">Decrypt</button>
 
   <div class="output" id="results" hidden>
-    <h3>🔐 Encrypted Results (Base64)</h3>
-    <div class="label">Ciphertext:</div>
+    <h3>🔐 Encrypted Results</h3>
+    <div class="label">Ciphertext (Base64):</div>
     <div id="ciphertext"></div>
 
-    <div class="label">Shared Secret:</div>
+    <div class="label">Shared Secret (Base64):</div>
     <div id="shared"></div>
 
     <div class="label">Decrypted Message:</div>
@@ -136,13 +137,12 @@
 
     let sharedSecret = null;
     let privateKey = null;
-    let ciphertextFull = null;
+    let ciphertextBytes = null;
     let iv = null;
+    let encryptedPayload = null;
 
     const encoder = new TextEncoder();
     const decoder = new TextDecoder();
-
-    const results = document.getElementById("results");
 
     function toggleInfo() {
       const box = document.getElementById("explain-box");
@@ -150,49 +150,52 @@
     }
 
     async function encrypt() {
-      const msg = document.getElementById("plaintext").value;
-      const plaintext = encoder.encode(msg);
+      const message = document.getElementById("plaintext").value;
+      if (!message.trim()) return alert("Please enter a message.");
+
+      const plaintext = encoder.encode(message);
 
       const recipient = new Kyber();
       const [pk, sk] = await recipient.generateKeyPair();
       privateKey = sk;
 
       const sender = new Kyber();
-      const [ciphertextBytes, shared] = await sender.encap(pk);
+      const [ciphertext, shared] = await sender.encap(pk);
       sharedSecret = shared;
+      ciphertextBytes = ciphertext;
 
-      const aesKey = await crypto.subtle.importKey("raw", shared, "AES-GCM", false, ["encrypt"]);
+      const aesKey = await crypto.subtle.importKey("raw", sharedSecret, "AES-GCM", false, ["encrypt"]);
       iv = crypto.getRandomValues(new Uint8Array(12));
       const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aesKey, plaintext);
+      encryptedPayload = new Uint8Array(iv.length + encrypted.byteLength);
+      encryptedPayload.set(iv, 0);
+      encryptedPayload.set(new Uint8Array(encrypted), iv.length);
 
-      ciphertextFull = new Uint8Array(iv.length + encrypted.byteLength);
-      ciphertextFull.set(iv, 0);
-      ciphertextFull.set(new Uint8Array(encrypted), iv.length);
-
-      document.getElementById("ciphertext").textContent = btoa(String.fromCharCode(...ciphertextFull));
-      document.getElementById("shared").textContent = btoa(String.fromCharCode(...shared));
-      results.hidden = false;
+      document.getElementById("ciphertext").textContent = btoa(String.fromCharCode(...encryptedPayload));
+      document.getElementById("shared").textContent = btoa(String.fromCharCode(...sharedSecret));
+      document.getElementById("decrypted").textContent = "(Click decrypt to verify)";
+      document.getElementById("results").hidden = false;
     }
 
     async function decrypt() {
-      if (!sharedSecret || !ciphertextFull || !iv || !privateKey) {
-        alert("Please encrypt a message first.");
+      if (!sharedSecret || !encryptedPayload || !privateKey || !ciphertextBytes || !iv) {
+        alert("No encryption session available. Please encrypt first.");
         return;
       }
 
       const receiver = new Kyber();
-      const decryptedKey = await receiver.decap(ciphertextFull.slice(0, receiver.ciphertextBytes), privateKey);
-      const aesKey = await crypto.subtle.importKey("raw", decryptedKey, "AES-GCM", false, ["decrypt"]);
+      const sharedDec = await receiver.decap(ciphertextBytes, privateKey);
+      const aesKey = await crypto.subtle.importKey("raw", sharedDec, "AES-GCM", false, ["decrypt"]);
 
       try {
         const decrypted = await crypto.subtle.decrypt(
           { name: "AES-GCM", iv },
           aesKey,
-          ciphertextFull.slice(iv.length)
+          encryptedPayload.slice(iv.length)
         );
         document.getElementById("decrypted").textContent = decoder.decode(decrypted);
       } catch (e) {
-        document.getElementById("decrypted").textContent = "⚠️ Decryption failed";
+        document.getElementById("decrypted").textContent = "⚠️ Decryption failed.";
       }
     }
   </script>
