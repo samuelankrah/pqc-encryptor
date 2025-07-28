@@ -1,91 +1,55 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>PQC Demo – Simulated Kyber + AES Encryption</title>
+  <meta charset="UTF-8"/>
+  <title>PQC Encryptor – Real Kyber</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #101010;
-      color: #f4f4f4;
-      padding: 2rem;
-      max-width: 700px;
-      margin: auto;
-    }
-    textarea, input, button {
-      width: 100%;
-      padding: 1rem;
-      margin-top: 1rem;
-      font-size: 1rem;
-      border-radius: 8px;
-      border: none;
-    }
-    button {
-      background-color: #00b894;
-      color: white;
-      font-weight: bold;
-      cursor: pointer;
-    }
-    .output {
-      background: #2d3436;
-      padding: 1rem;
-      margin-top: 1rem;
-      border-radius: 8px;
-      word-break: break-word;
-    }
+    body { max-width: 700px; margin: auto; padding: 2rem; font-family: sans-serif; background:#111; color:#f4f4f4; }
+    textarea, button { width: 100%; padding:1rem; margin-top:1rem; font-size:1rem; border-radius:8px; border:none; }
+    button { background:#00cec9;color:#fff;cursor:pointer;font-weight:bold; }
+    .output { background:#2d3436;padding:1rem;margin-top:1.5rem;border-radius:8px;word-wrap:break-word; }
   </style>
 </head>
 <body>
-
-  <h1>🔐 PQC Encryption Demo</h1>
-  <p>This is a simulated hybrid PQC encryption using AES-GCM.<br>
-  In a real system, Kyber would derive the AES key.</p>
-
-  <label for="plaintext">Enter your plaintext message:</label>
-  <textarea id="plaintext" rows="5" placeholder="Type your message here..."></textarea>
-
-  <button onclick="encrypt()">Encrypt with Simulated PQC</button>
-
-  <div class="output" id="cipherOutput" hidden>
-    <h3>🔑 Ciphertext Output (Base64)</h3>
-    <div id="ciphertext"></div>
-    <h4>🧬 AES Key (for demo)</h4>
-    <div id="key"></div>
+  <h1>🔐 PQC Encryptor (Kyber768 + AES-GCM)</h1>
+  <textarea id="plaintext" rows="5" placeholder="Type a message..."></textarea>
+  <button id="encryptBtn">Encrypt</button>
+  <div class="output" id="results" hidden>
+    <h3>Encrypted Results (Base64)</h3>
+    <strong>Ciphertext:</strong><div id="ciphertext"></div>
+    <strong>Shared Secret:</strong><div id="shared"></div>
   </div>
 
-  <script>
+  <script type="module">
+    import { MlKem768 as Kyber } from "https://esm.sh/mlkem@latest";
+    const encryptBtn = document.getElementById("encryptBtn");
     async function encrypt() {
+      const text = document.getElementById("plaintext").value;
       const encoder = new TextEncoder();
-      const data = encoder.encode(document.getElementById("plaintext").value);
+      const plaintext = encoder.encode(text);
 
-      // Simulate a shared secret from Kyber (32 bytes)
-      const simulatedPQCKey = crypto.getRandomValues(new Uint8Array(32));
+      const recipient = new Kyber();
+      const [pk, sk] = await recipient.generateKeyPair();
 
-      // Derive AES-GCM key
-      const key = await crypto.subtle.importKey(
-        "raw", simulatedPQCKey, { name: "AES-GCM" }, false, ["encrypt"]
-      );
+      const sender = new Kyber();
+      const [ciphertextBytes, sharedSecretSender] = await sender.encap(pk);
 
+      const sharedSecretReceiver = await recipient.decap(ciphertextBytes, sk);
+
+      const key = await crypto.subtle.importKey("raw", sharedSecretSender, { name: "AES-GCM" }, false, ["encrypt"]);
       const iv = crypto.getRandomValues(new Uint8Array(12));
-      const ciphertextBuffer = await crypto.subtle.encrypt(
-        { name: "AES-GCM", iv: iv },
-        key,
-        data
-      );
+      const encrypted = await crypto.subtle.encrypt({ name:"AES-GCM", iv }, key, plaintext);
+      const full = new Uint8Array(iv.length + encrypted.byteLength);
+      full.set(iv,0);
+      full.set(new Uint8Array(encrypted), iv.length);
 
-      const fullCipher = new Uint8Array(iv.byteLength + ciphertextBuffer.byteLength);
-      fullCipher.set(iv, 0);
-      fullCipher.set(new Uint8Array(ciphertextBuffer), iv.byteLength);
-
-      // Display base64 ciphertext
-      const base64Cipher = btoa(String.fromCharCode(...fullCipher));
-      const base64Key = btoa(String.fromCharCode(...simulatedPQCKey));
-
-      document.getElementById("ciphertext").textContent = base64Cipher;
-      document.getElementById("key").textContent = base64Key;
-      document.getElementById("cipherOutput").hidden = false;
+      const b64Cipher = btoa(String.fromCharCode(...full));
+      const b64Secret = btoa(String.fromCharCode(...sharedSecretSender));
+      document.getElementById("ciphertext").textContent = b64Cipher;
+      document.getElementById("shared").textContent = b64Secret;
+      document.getElementById("results").hidden = false;
     }
+    encryptBtn.onclick = encrypt;
   </script>
-
 </body>
 </html>
