@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PQC Demo – Simulated Kyber + AES Encryption</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #101010;
+      color: #f4f4f4;
+      padding: 2rem;
+      max-width: 700px;
+      margin: auto;
+    }
+    textarea, input, button {
+      width: 100%;
+      padding: 1rem;
+      margin-top: 1rem;
+      font-size: 1rem;
+      border-radius: 8px;
+      border: none;
+    }
+    button {
+      background-color: #00b894;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .output {
+      background: #2d3436;
+      padding: 1rem;
+      margin-top: 1rem;
+      border-radius: 8px;
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🔐 PQC Encryption Demo</h1>
+  <p>This is a simulated hybrid PQC encryption using AES-GCM.<br>
+  In a real system, Kyber would derive the AES key.</p>
+
+  <label for="plaintext">Enter your plaintext message:</label>
+  <textarea id="plaintext" rows="5" placeholder="Type your message here..."></textarea>
+
+  <button onclick="encrypt()">Encrypt with Simulated PQC</button>
+
+  <div class="output" id="cipherOutput" hidden>
+    <h3>🔑 Ciphertext Output (Base64)</h3>
+    <div id="ciphertext"></div>
+    <h4>🧬 AES Key (for demo)</h4>
+    <div id="key"></div>
+  </div>
+
+  <script>
+    async function encrypt() {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(document.getElementById("plaintext").value);
+
+      // Simulate a shared secret from Kyber (32 bytes)
+      const simulatedPQCKey = crypto.getRandomValues(new Uint8Array(32));
+
+      // Derive AES-GCM key
+      const key = await crypto.subtle.importKey(
+        "raw", simulatedPQCKey, { name: "AES-GCM" }, false, ["encrypt"]
+      );
+
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const ciphertextBuffer = await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv: iv },
+        key,
+        data
+      );
+
+      const fullCipher = new Uint8Array(iv.byteLength + ciphertextBuffer.byteLength);
+      fullCipher.set(iv, 0);
+      fullCipher.set(new Uint8Array(ciphertextBuffer), iv.byteLength);
+
+      // Display base64 ciphertext
+      const base64Cipher = btoa(String.fromCharCode(...fullCipher));
+      const base64Key = btoa(String.fromCharCode(...simulatedPQCKey));
+
+      document.getElementById("ciphertext").textContent = base64Cipher;
+      document.getElementById("key").textContent = base64Key;
+      document.getElementById("cipherOutput").hidden = false;
+    }
+  </script>
+
+</body>
+</html>
