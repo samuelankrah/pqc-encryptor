@@ -152,5 +152,136 @@
       decBtn.disabled = false; decBtn.textContent = "Decrypt";
     };
   </script>
+  <!-- 1) Minimal UI -->
+<section id="demo-cert" style="margin-top:24px;padding:16px;border:1px solid #e5e7eb;border-radius:12px">
+  <h3>Generate Demo Certificate (PEM)</h3>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0">
+    <input id="certCN" placeholder="Common Name (e.g., entaq.local)" />
+    <input id="certSAN" placeholder="SAN DNS (optional)" />
+    <select id="certAlg">
+      <option value="ECDSA">ECDSA P-256 (SHA-256)</option>
+      <option value="RSA">RSA 2048 (SHA-256)</option>
+    </select>
+    <button id="btnGenCert">Generate</button>
+  </div>
+  <div>
+    <textarea id="pemCert" readonly style="width:100%;min-height:140px" placeholder="PEM certificate will appear here"></textarea>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:8px">
+    <button id="dlCert">Download Cert (.pem)</button>
+    <button id="copyCert">Copy PEM</button>
+    <small style="opacity:.7">Public certificate only. Keep private keys secret.</small>
+  </div>
+</section>
+
+<!-- 2) Library for X.509 (browser-only, MIT) -->
+<script src="https://cdn.jsdelivr.net/npm/jsrsasign@10.9.0/lib/jsrsasign-all-min.js"></script>
+
+<!-- 3) Generator script -->
+<script>
+(async function () {
+  const $ = (id)=>document.getElementById(id);
+  const b64 = (arr)=>window.btoa(String.fromCharCode(...new Uint8Array(arr)));
+  function toPem(label, derHex){
+    const b = window.hex2b64(derHex);
+    return `-----BEGIN ${label}-----\n` + b.replace(/(.{64})/g,"$1\n") + `\n-----END ${label}-----\n`;
+  }
+  async function genECDSA() {
+    // WebCrypto keypair (P-256)
+    const kp = await crypto.subtle.generateKey({ name:"ECDSA", namedCurve:"P-256" }, true, ["sign","verify"]);
+    const spki = await crypto.subtle.exportKey("spki", kp.publicKey);
+    const pkcs8 = await crypto.subtle.exportKey("pkcs8", kp.privateKey);
+
+    // Build self-signed X.509 with jsrsasign using the SPKI
+    const pub = KJUR.asn1.ASN1Util.newObject({ 'seq': KJUR.asn1.ASN1Util.newObject({}) }); // placeholder (we’ll set via KEYUTIL)
+    const prv = KEYUTIL.getKey({ kty: "EC", crv: "P-256", d: null }); // placeholder
+
+    // Import raw keys into jsrsasign
+    const jsPub = KEYUTIL.getKey(await KEYUTIL.parsePublicRawSPKI(spki));
+    const jsPrv = KEYUTIL.getKey(await KEYUTIL.parsePrivateRawPKCS8(pkcs8));
+
+    const cn  = $("certCN").value.trim() || "ENTAQ Demo";
+    const san = $("certSAN").value.trim();
+    const cert = new KJUR.asn1.x509.Certificate({
+      version: 3,
+      serial: KJUR.asn1.ASN1Util.bigIntToMinTwosComplementsHexString(new KJUR.BigInteger(String(Date.now()))),
+      sigalg: "SHA256withECDSA",
+      issuer: { str: `/CN=${cn}` },
+      subject: { str: `/CN=${cn}` },
+      notbefore: KJUR.jws.IntDate.intDate2Zulu(KJUR.jws.IntDate.getNow()),
+      notafter:  KJUR.jws.IntDate.intDate2Zulu(KJUR.jws.IntDate.getNow() + 365*24*3600),
+      sbjpubkey: jsPub,
+      ext: [
+        new KJUR.asn1.x509.BasicConstraints({ cA:false }),
+        new KJUR.asn1.x509.KeyUsage({ bin: "00000110" }), // digitalSignature,keyEncipherment-ish
+      ]
+    });
+    if (san) cert.appendExtension(new KJUR.asn1.x509.SubjectAltName({ array:[{ dns: san }] }));
+
+    cert.sign(jsPrv, "SHA256withECDSA");
+    const derHex = cert.getEncodedHex();
+    return { pemCert: toPem("CERTIFICATE", derHex) };
+  }
+
+  async function genRSA() {
+    const kp = await crypto.subtle.generateKey(
+      { name:"RSASSA-PKCS1-v1_5", modulusLength:2048, publicExponent:new Uint8Array([1,0,1]), hash:"SHA-256" },
+      true, ["sign","verify"]
+    );
+    const spki = await crypto.subtle.exportKey("spki", kp.publicKey);
+    const pkcs8 = await crypto.subtle.exportKey("pkcs8", kp.privateKey);
+
+    const jsPub = KEYUTIL.getKey(await KEYUTIL.parsePublicRawSPKI(spki));
+    const jsPrv = KEYUTIL.getKey(await KEYUTIL.parsePrivateRawPKCS8(pkcs8));
+
+    const cn  = $("certCN").value.trim() || "ENTAQ Demo";
+    const san = $("certSAN").value.trim();
+    const cert = new KJUR.asn1.x509.Certificate({
+      version: 3,
+      serial: KJUR.asn1.ASN1Util.bigIntToMinTwosComplementsHexString(new KJUR.BigInteger(String(Date.now()))),
+      sigalg: "SHA256withRSA",
+      issuer: { str: `/CN=${cn}` },
+      subject:{ str: `/CN=${cn}` },
+      notbefore: KJUR.jws.IntDate.intDate2Zulu(KJUR.jws.IntDate.getNow()),
+      notafter:  KJUR.jws.IntDate.intDate2Zulu(KJUR.jws.IntDate.getNow() + 365*24*3600),
+      sbjpubkey: jsPub,
+      ext: [
+        new KJUR.asn1.x509.BasicConstraints({ cA:false }),
+        new KJUR.asn1.x509.KeyUsage({ bin: "00000110" })
+      ]
+    });
+    if (san) cert.appendExtension(new KJUR.asn1.x509.SubjectAltName({ array:[{ dns: san }] }));
+
+    cert.sign(jsPrv, "SHA256withRSA");
+    const derHex = cert.getEncodedHex();
+    return { pemCert: toPem("CERTIFICATE", derHex) };
+  }
+
+  $("btnGenCert").addEventListener("click", async ()=>{
+    $("pemCert").value = "Generating…";
+    try{
+      const alg = $("certAlg").value;
+      const { pemCert } = (alg === "RSA") ? await genRSA() : await genECDSA();
+      $("pemCert").value = pemCert;
+    }catch(e){
+      $("pemCert").value = "Error: " + e.message;
+    }
+  });
+
+  function download(filename, text){
+    const blob = new Blob([text], {type: "application/x-pem-file"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href=url; a.download=filename; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url), 1500);
+  }
+  $("dlCert").addEventListener("click", ()=> download("entaq-demo-cert.pem", $("pemCert").value));
+  $("copyCert").addEventListener("click", async ()=>{
+    await navigator.clipboard.writeText($("pemCert").value);
+    $("copyCert").textContent = "Copied!";
+    setTimeout(()=>{$("copyCert").textContent="Copy PEM";}, 1200);
+  });
+})();
+</script>
 </body>
 </html>
+
